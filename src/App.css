@@ -1,5 +1,5 @@
 .app {
-  max-width: 1280px;
+  max-width: 480px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
@@ -22,47 +22,13 @@
   margin: 0;
 }
 
-.logo-row {
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .logo.react {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
 .card {
+  width: 100%;
   padding: 2em;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
+  text-align: left;
 }
 
 @media (prefers-color-scheme: light) {
@@ -72,36 +38,105 @@
   }
 }
 
-button {
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.login-form input[type='email'] {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.75em 1em;
+  font-size: 1em;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  color: inherit;
+}
+
+.login-form input[type='email']:focus {
+  outline: 2px solid #646cff;
+  border-color: transparent;
+}
+
+@media (prefers-color-scheme: light) {
+  .login-form input[type='email'] {
+    border-color: rgba(0, 0, 0, 0.15);
+    background-color: #fff;
+  }
+}
+
+.submit-button {
+  margin-top: 0.5rem;
   border-radius: 8px;
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: #646cff;
+  color: #fff;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: opacity 0.25s;
 }
 
-button:hover {
-  border-color: #646cff;
+.submit-button:hover {
+  opacity: 0.9;
 }
 
-button:focus,
-button:focus-visible {
+.submit-button:focus,
+.submit-button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+.hint {
+  margin: 0;
+  color: #888;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.status {
+  display: block;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #aaa;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 @media (prefers-color-scheme: light) {
-  button {
-    background-color: #f9f9f9;
+  .status {
+    border-top-color: rgba(0, 0, 0, 0.08);
+    color: #666;
   }
 }
 
-.hint {
-  margin-top: 1.5rem;
-  color: #888;
+.status-badge {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.status-badge--ok {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.status-badge--warn {
+  background: rgba(234, 179, 8, 0.2);
+  color: #ca8a04;
 }
 
 code {
@@ -114,8 +149,10 @@ code {
 .app-footer {
   color: #888;
   font-size: 0.9rem;
+  text-align: center;
 }
 
 .app-footer p {
   margin: 0;
+  line-height: 1.5;
 }
