@@ -5,13 +5,16 @@ type DemoMode =
   | "email"
   | "webauthn"
   | "webauthn-allow-credentials"
+  | "webauthn-empty-allow-credentials"
   | "webauthn-wrong-challenge";
+
+type AllowCredentialsMode = "omit" | "populated" | "empty";
 
 type ModeConfig = {
   id: DemoMode;
   label: string;
   webAuthn: boolean;
-  allowCredentials: boolean;
+  allowCredentials: AllowCredentialsMode;
   wrongChallenge: boolean;
 };
 
@@ -20,28 +23,35 @@ const MODES: ModeConfig[] = [
     id: "email",
     label: "Email",
     webAuthn: false,
-    allowCredentials: false,
+    allowCredentials: "omit",
     wrongChallenge: false,
   },
   {
     id: "webauthn",
     label: "WebAuthn",
     webAuthn: true,
-    allowCredentials: false,
+    allowCredentials: "omit",
     wrongChallenge: false,
   },
   {
     id: "webauthn-allow-credentials",
     label: "WebAuthn + allowCredentials",
     webAuthn: true,
-    allowCredentials: true,
+    allowCredentials: "populated",
+    wrongChallenge: false,
+  },
+  {
+    id: "webauthn-empty-allow-credentials",
+    label: "WebAuthn + allowCredentials: []",
+    webAuthn: true,
+    allowCredentials: "empty",
     wrongChallenge: false,
   },
   {
     id: "webauthn-wrong-challenge",
     label: "WebAuthn + allowCredentials + wrong challenge",
     webAuthn: true,
-    allowCredentials: true,
+    allowCredentials: "populated",
     wrongChallenge: true,
   },
 ];
@@ -107,6 +117,10 @@ function parseDemoMode(search: string): DemoMode {
     return "webauthn-wrong-challenge";
   }
 
+  if (params.get("allowCredentials") === "empty") {
+    return "webauthn-empty-allow-credentials";
+  }
+
   if (params.get("allowCredentials") === "true") {
     return "webauthn-allow-credentials";
   }
@@ -126,8 +140,10 @@ function getModeUrl(mode: DemoMode): string {
     url.searchParams.set("webAuthn", "true");
   }
 
-  if (config.allowCredentials) {
+  if (config.allowCredentials === "populated") {
     url.searchParams.set("allowCredentials", "true");
+  } else if (config.allowCredentials === "empty") {
+    url.searchParams.set("allowCredentials", "empty");
   }
 
   if (config.wrongChallenge) {
@@ -208,7 +224,14 @@ function App() {
         setStatus(
           "Wrong challenge mode — request should fail. Autofill popup will not appear.",
         );
-      } else if (modeConfig.allowCredentials && !getStoredCredentialId()) {
+      } else if (modeConfig.allowCredentials === "empty") {
+        setStatus(
+          "Empty allowCredentials: [] — conditional request started. This may hang on Android.",
+        );
+      } else if (
+        modeConfig.allowCredentials === "populated" &&
+        !getStoredCredentialId()
+      ) {
         setStatus(
           "allowCredentials mode uses a demo credential ID. Register a passkey first, or switch to WebAuthn mode.",
         );
@@ -230,7 +253,7 @@ function App() {
           userVerification: "preferred",
         };
 
-        if (modeConfig.allowCredentials) {
+        if (modeConfig.allowCredentials === "populated") {
           const credentialId = getStoredCredentialId() ?? DEMO_CREDENTIAL_ID;
           publicKey.allowCredentials = [
             {
@@ -239,6 +262,8 @@ function App() {
               transports: ["internal", "hybrid"],
             },
           ];
+        } else if (modeConfig.allowCredentials === "empty") {
+          publicKey.allowCredentials = [];
         }
 
         const credential = await navigator.credentials.get({
@@ -395,13 +420,19 @@ function App() {
 
           <p className="hint">
             <code>autoComplete=&quot;{autoComplete}&quot;</code>
-            {modeConfig.allowCredentials && (
+            {modeConfig.allowCredentials === "populated" && (
               <>
                 {" "}
                 · <code>allowCredentials</code>
                 {registeredCredentialId
                   ? " with your registered credential"
                   : " with demo credential ID (won't match)"}
+              </>
+            )}
+            {modeConfig.allowCredentials === "empty" && (
+              <>
+                {" "}
+                · <code>allowCredentials: []</code> (empty array)
               </>
             )}
             {modeConfig.wrongChallenge && (
@@ -461,6 +492,11 @@ function App() {
             <li>
               <strong>Discoverable passkey required:</strong> only resident keys
               appear in conditional UI. Registration here creates one.
+            </li>
+            <li>
+              <strong>Empty allowCredentials:</strong>{" "}
+              <code>allowCredentials: []</code> with conditional mediation can
+              hang on Android and block later WebAuthn calls.
             </li>
             <li>
               <strong>allowCredentials mode:</strong> filters to specific
