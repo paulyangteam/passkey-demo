@@ -19,7 +19,52 @@
 
 .tagline {
   color: #888;
-  margin: 0;
+  margin: 0 0 1rem;
+}
+
+.mode-nav {
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+@media (prefers-color-scheme: light) {
+  .mode-nav {
+    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(0, 0, 0, 0.02);
+  }
+}
+
+.mode-nav-link {
+  display: inline-block;
+  padding: 0.45em 0.9em;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.75;
+  transition:
+    background-color 0.2s,
+    opacity 0.2s;
+}
+
+.mode-nav-link:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.15);
+}
+
+.mode-nav-link.is-active {
+  opacity: 1;
+  background: #646cff;
+  color: #fff;
+}
+
+.mode-nav-link.is-active:hover {
+  background: #535bf2;
 }
 
 .card {
@@ -49,7 +94,7 @@
   font-size: 0.95rem;
 }
 
-.login-form input[type='email'] {
+.login-form input[type="email"] {
   width: 100%;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -60,13 +105,13 @@
   color: inherit;
 }
 
-.login-form input[type='email']:focus {
+.login-form input[type="email"]:focus {
   outline: 2px solid #646cff;
   border-color: transparent;
 }
 
 @media (prefers-color-scheme: light) {
-  .login-form input[type='email'] {
+  .login-form input[type="email"] {
     border-color: rgba(0, 0, 0, 0.15);
     background-color: #fff;
   }

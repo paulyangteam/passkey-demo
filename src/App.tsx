@@ -1,97 +1,139 @@
-import { useEffect, useState } from 'react'
-import './App.css'
+import { useEffect, useState } from "react";
+import "./App.css";
 
 function randomChallenge(): Uint8Array {
-  const challenge = new Uint8Array(32)
-  crypto.getRandomValues(challenge)
-  return challenge
+  const challenge = new Uint8Array(32);
+  crypto.getRandomValues(challenge);
+  return challenge;
 }
 
 function useWebAuthnParam(): boolean {
-  return new URLSearchParams(window.location.search).get('webAuthn') === 'true'
+  return new URLSearchParams(window.location.search).get("webAuthn") === "true";
+}
+
+function getModeUrl(webAuthn: boolean): string {
+  const url = new URL(window.location.href);
+
+  if (webAuthn) {
+    url.searchParams.set("webAuthn", "true");
+  } else {
+    url.searchParams.delete("webAuthn");
+  }
+
+  return `${url.pathname}${url.search}`;
 }
 
 function App() {
-  const webAuthnMode = useWebAuthnParam()
-  const [email, setEmail] = useState('')
-  const [status, setStatus] = useState('Checking conditional passkey support…')
-  const [conditionalAvailable, setConditionalAvailable] = useState<boolean | null>(null)
+  const webAuthnMode = useWebAuthnParam();
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState("Checking conditional passkey support…");
+  const [conditionalAvailable, setConditionalAvailable] = useState<
+    boolean | null
+  >(null);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     async function startConditionalPasskey() {
       if (!window.PublicKeyCredential) {
-        setConditionalAvailable(false)
-        setStatus('WebAuthn is not supported in this browser.')
-        return
+        setConditionalAvailable(false);
+        setStatus("WebAuthn is not supported in this browser.");
+        return;
       }
 
       const available =
-        typeof PublicKeyCredential.isConditionalMediationAvailable === 'function'
+        typeof PublicKeyCredential.isConditionalMediationAvailable ===
+        "function"
           ? await PublicKeyCredential.isConditionalMediationAvailable()
-          : false
+          : false;
 
-      if (cancelled) return
+      if (cancelled) return;
 
-      setConditionalAvailable(available)
+      setConditionalAvailable(available);
 
       if (!available) {
-        setStatus('Conditional passkey UI is not available in this browser.')
-        return
+        setStatus("Conditional passkey UI is not available in this browser.");
+        return;
       }
 
-      setStatus('Conditional passkey UI is active — focus the email field to see suggestions.')
+      setStatus(
+        "Conditional passkey UI is active — focus the email field to see suggestions.",
+      );
 
       try {
         const credential = await navigator.credentials.get({
-          mediation: 'conditional',
+          mediation: "conditional",
           publicKey: {
-            challenge: randomChallenge(),
+            challenge: randomChallenge().buffer as BufferSource,
             rpId: window.location.hostname,
-            userVerification: 'preferred',
+            userVerification: "preferred",
           },
-        })
+        });
 
-        if (cancelled) return
+        if (cancelled) return;
 
         if (credential) {
-          setStatus(`Passkey selected (${credential.type}).`)
+          setStatus(`Passkey selected (${credential.type}).`);
         }
       } catch (error) {
-        if (cancelled) return
+        if (cancelled) return;
 
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          setStatus('Conditional passkey UI is active — focus the email field to see suggestions.')
-          return
+        if (error instanceof DOMException && error.name === "AbortError") {
+          setStatus(
+            "Conditional passkey UI is active — focus the email field to see suggestions.",
+          );
+          return;
         }
 
         setStatus(
-          error instanceof Error ? error.message : 'Conditional passkey request failed.',
-        )
+          error instanceof Error
+            ? error.message
+            : "Conditional passkey request failed.",
+        );
       }
     }
 
-    void startConditionalPasskey()
+    void startConditionalPasskey();
 
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
-  const autoComplete = webAuthnMode ? 'webauthn' : 'email'
+  const autoComplete = webAuthnMode ? "webauthn" : "email";
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>Passkey Demo</h1>
-        <p className="tagline">
-          Conditional WebAuthn UI with an email field
-        </p>
+        <p className="tagline">Conditional WebAuthn UI with an email field</p>
+        <nav className="mode-nav" aria-label="Autocomplete mode">
+          <a
+            href={getModeUrl(false)}
+            className={
+              webAuthnMode ? "mode-nav-link" : "mode-nav-link is-active"
+            }
+            aria-current={webAuthnMode ? undefined : "page"}
+          >
+            Email mode
+          </a>
+          <a
+            href={getModeUrl(true)}
+            className={
+              webAuthnMode ? "mode-nav-link is-active" : "mode-nav-link"
+            }
+            aria-current={webAuthnMode ? "page" : undefined}
+          >
+            WebAuthn mode
+          </a>
+        </nav>
       </header>
 
       <main className="card">
-        <form className="login-form" onSubmit={(event) => event.preventDefault()}>
+        <form
+          className="login-form"
+          onSubmit={(event) => event.preventDefault()}
+        >
           <label className="field-label" htmlFor="email">
             Email
           </label>
@@ -109,9 +151,15 @@ function App() {
           <p className="hint">
             <code>autoComplete=&quot;{autoComplete}&quot;</code>
             {webAuthnMode ? (
-              <> — enabled via <code>?webAuthn=true</code></>
+              <>
+                {" "}
+                — enabled via <code>?webAuthn=true</code>
+              </>
             ) : (
-              <> — add <code>?webAuthn=true</code> for passkey autocomplete</>
+              <>
+                {" "}
+                — add <code>?webAuthn=true</code> for passkey autocomplete
+              </>
             )}
           </p>
 
@@ -122,7 +170,9 @@ function App() {
 
         <output className="status" aria-live="polite">
           {conditionalAvailable === true && (
-            <span className="status-badge status-badge--ok">Conditional UI</span>
+            <span className="status-badge status-badge--ok">
+              Conditional UI
+            </span>
           )}
           {conditionalAvailable === false && (
             <span className="status-badge status-badge--warn">Unavailable</span>
@@ -133,12 +183,12 @@ function App() {
 
       <footer className="app-footer">
         <p>
-          Focus the email input to trigger browser passkey autofill when credentials exist for{' '}
-          <code>{window.location.hostname}</code>.
+          Focus the email input to trigger browser passkey autofill when
+          credentials exist for <code>{window.location.hostname}</code>.
         </p>
       </footer>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
