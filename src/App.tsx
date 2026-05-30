@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 type DemoMode =
@@ -46,6 +46,8 @@ const MODES: ModeConfig[] = [
   },
 ];
 
+const REGISTERED_CREDENTIAL_KEY = "passkey-demo-credential-id";
+
 const DEMO_CREDENTIAL_ID = Uint8Array.from(
   atob("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAh"),
   (char) => char.charCodeAt(0),
@@ -55,6 +57,40 @@ function randomChallenge(): Uint8Array {
   const challenge = new Uint8Array(32);
   crypto.getRandomValues(challenge);
   return challenge;
+}
+
+function randomUserId(): Uint8Array {
+  const userId = new Uint8Array(16);
+  crypto.getRandomValues(userId);
+  return userId;
+}
+
+function bufferToBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function base64UrlToBuffer(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+}
+
+function getStoredCredentialId(): Uint8Array | null {
+  const stored = localStorage.getItem(REGISTERED_CREDENTIAL_KEY);
+  if (!stored) return null;
+  try {
+    return base64UrlToBuffer(stored);
+  } catch {
+    return null;
+  }
 }
 
 function parseDemoMode(search: string): DemoMode {
@@ -114,13 +150,21 @@ function buildChallenge(wrongChallenge: boolean): BufferSource | string {
 function App() {
   const mode = useMemo(() => parseDemoMode(window.location.search), []);
   const modeConfig = MODES.find((entry) => entry.id === mode) ?? MODES[0];
+  const abortRef = useRef<AbortController | null>(null);
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("Checking conditional passkey support…");
   const [conditionalAvailable, setConditionalAvailable] = useState<
     boolean | null
   >(null);
+  const [registeredCredentialId, setRegisteredCredentialId] = useState<
+    string | null
+  >(() => localStorage.getItem(REGISTERED_CREDENTIAL_KEY));
+  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
+    abortRef.current?.abort();
+    const abortController = new AbortController();
+    abortRef.current = abortController;
     let cancelled = false;
 
     async function startConditionalPasskey() {
@@ -141,13 +185,29 @@ function App() {
       setConditionalAvailable(available);
 
       if (!available) {
-        setStatus("Conditional passkey UI is not available in this browser.");
+        setStatus(
+          "Conditional passkey UI is not available. Try Chrome/Edge 108+ or Safari 17+.",
+        );
         return;
       }
 
-      setStatus(
-        "Conditional passkey UI is active — focus the email field to see suggestions.",
-      );
+      if (modeConfig.wrongChallenge) {
+        setStatus(
+          "Wrong challenge mode — request should fail. Autofill popup will not appear.",
+        );
+      } else if (modeConfig.allowCredentials && !getStoredCredentialId()) {
+        setStatus(
+          "allowCredentials mode uses a demo credential ID. Register a passkey first, or switch to WebAuthn mode.",
+        );
+      } else if (!registeredCredentialId) {
+        setStatus(
+          "No passkey registered for this site yet. Register one below, then focus the email field.",
+        );
+      } else {
+        setStatus(
+          "Conditional UI is active — click the email field to see passkey suggestions.",
+        );
+      }
 
       try {
         const publicKey: PublicKeyCredentialRequestOptions = {
@@ -157,10 +217,11 @@ function App() {
         };
 
         if (modeConfig.allowCredentials) {
+          const credentialId = getStoredCredentialId() ?? DEMO_CREDENTIAL_ID;
           publicKey.allowCredentials = [
             {
               type: "public-key",
-              id: DEMO_CREDENTIAL_ID,
+              id: credentialId,
               transports: ["internal", "hybrid"],
             },
           ];
@@ -168,6 +229,7 @@ function App() {
 
         const credential = await navigator.credentials.get({
           mediation: "conditional",
+          signal: abortController.signal,
           publicKey,
         });
 
@@ -177,12 +239,9 @@ function App() {
           setStatus(`Passkey selected (${credential.type}).`);
         }
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled || abortController.signal.aborted) return;
 
         if (error instanceof DOMException && error.name === "AbortError") {
-          setStatus(
-            "Conditional passkey UI is active — focus the email field to see suggestions.",
-          );
           return;
         }
 
@@ -198,10 +257,73 @@ function App() {
 
     return () => {
       cancelled = true;
+      abortController.abort();
     };
-  }, [modeConfig.allowCredentials, modeConfig.wrongChallenge]);
+  }, [
+    modeConfig.allowCredentials,
+    modeConfig.wrongChallenge,
+    registeredCredentialId,
+  ]);
 
-  const autoComplete = modeConfig.webAuthn ? "webauthn" : "email";
+  async function registerPasskey() {
+    if (!window.PublicKeyCredential) {
+      setStatus("WebAuthn is not supported in this browser.");
+      return;
+    }
+
+    setRegistering(true);
+
+    try {
+      const username = email.trim() || "demo@example.com";
+      const credential = (await navigator.credentials.create({
+        publicKey: {
+          challenge: randomChallenge(),
+          rp: {
+            name: "Passkey Demo",
+            id: window.location.hostname,
+          },
+          user: {
+            id: randomUserId(),
+            name: username,
+            displayName: username,
+          },
+          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+          authenticatorSelection: {
+            residentKey: "required",
+            userVerification: "preferred",
+          },
+        },
+      })) as PublicKeyCredential | null;
+
+      if (!credential) {
+        setStatus("Passkey registration was cancelled.");
+        return;
+      }
+
+      const credentialId = bufferToBase64Url(credential.rawId);
+      localStorage.setItem(REGISTERED_CREDENTIAL_KEY, credentialId);
+      setRegisteredCredentialId(credentialId);
+      setStatus(
+        "Passkey registered. Reload or focus the email field to see suggestions.",
+      );
+    } catch (error) {
+      setStatus(
+        error instanceof Error
+          ? `Registration failed: ${error.message}`
+          : "Passkey registration failed.",
+      );
+    } finally {
+      setRegistering(false);
+    }
+  }
+
+  function clearRegisteredPasskey() {
+    localStorage.removeItem(REGISTERED_CREDENTIAL_KEY);
+    setRegisteredCredentialId(null);
+    setStatus("Stored passkey cleared for this demo.");
+  }
+
+  const autoComplete = modeConfig.webAuthn ? "username webauthn" : "email";
 
   return (
     <div className="app">
@@ -234,10 +356,11 @@ function App() {
           </label>
           <input
             id="email"
-            name="email"
+            name="username"
             type="email"
             autoComplete={autoComplete}
             inputMode="email"
+            autoFocus={modeConfig.webAuthn}
             placeholder="you@example.com"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -248,7 +371,10 @@ function App() {
             {modeConfig.allowCredentials && (
               <>
                 {" "}
-                · <code>allowCredentials</code> with demo credential ID
+                · <code>allowCredentials</code>
+                {registeredCredentialId
+                  ? " with your registered credential"
+                  : " with demo credential ID (won't match)"}
               </>
             )}
             {modeConfig.wrongChallenge && (
@@ -259,9 +385,19 @@ function App() {
             )}
           </p>
 
-          <button type="submit" className="submit-button">
-            Continue
-          </button>
+          <div className="button-row">
+            <button type="submit" className="submit-button">
+              Continue
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void registerPasskey()}
+              disabled={registering}
+            >
+              {registering ? "Registering…" : "Register passkey"}
+            </button>
+          </div>
         </form>
 
         <output className="status" aria-live="polite">
@@ -275,12 +411,66 @@ function App() {
           )}
           {status}
         </output>
+
+        <section className="diagnostics">
+          <h2>Why no passkey popup?</h2>
+          <ul>
+            <li>
+              <strong>No passkey on this origin:</strong> conditional UI only
+              shows passkeys already saved for{" "}
+              <code>{window.location.hostname}</code>. Use{" "}
+              <strong>Register passkey</strong> first.
+            </li>
+            <li>
+              <strong>Focus the input:</strong> the suggestion appears in the
+              browser autofill dropdown when you click/focus the email field,
+              not automatically on page load.
+            </li>
+            <li>
+              <strong>Discoverable passkey required:</strong> only resident keys
+              appear in conditional UI. Registration here creates one.
+            </li>
+            <li>
+              <strong>allowCredentials mode:</strong> filters to specific
+              credential IDs. Without a matching registered passkey, nothing
+              shows.
+            </li>
+            <li>
+              <strong>Wrong challenge mode:</strong> intentionally invalid — the
+              request fails and autofill will not work.
+            </li>
+            <li>
+              <strong>Same rpId:</strong> passkeys are bound to{" "}
+              <code>{window.location.hostname}</code>. Registering on{" "}
+              <code>localhost</code> won't appear on GitHub Pages, and vice
+              versa.
+            </li>
+          </ul>
+
+          <p className="diagnostics-meta">
+            Registered passkey:{" "}
+            {registeredCredentialId ? (
+              <>
+                <code>{registeredCredentialId.slice(0, 16)}…</code>{" "}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={clearRegisteredPasskey}
+                >
+                  Clear
+                </button>
+              </>
+            ) : (
+              <span className="diagnostics-none">none</span>
+            )}
+          </p>
+        </section>
       </main>
 
       <footer className="app-footer">
         <p>
-          Focus the email input to trigger browser passkey autofill when
-          credentials exist for <code>{window.location.hostname}</code>.
+          Use Chrome/Edge 108+ or Safari 17+. Open via{" "}
+          <code>{window.location.origin}</code> (HTTPS or localhost).
         </p>
       </footer>
     </div>

@@ -131,6 +131,43 @@
   transition: opacity 0.25s;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.secondary-button {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition:
+    border-color 0.25s,
+    opacity 0.25s;
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: #646cff;
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (prefers-color-scheme: light) {
+  .secondary-button {
+    border-color: rgba(0, 0, 0, 0.15);
+  }
+}
+
 .submit-button:hover {
   opacity: 0.9;
 }
@@ -182,6 +219,59 @@
 .status-badge--warn {
   background: rgba(234, 179, 8, 0.2);
   color: #ca8a04;
+}
+
+.diagnostics {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.diagnostics h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.diagnostics ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #aaa;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.diagnostics li + li {
+  margin-top: 0.5rem;
+}
+
+.diagnostics-meta {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+  color: #888;
+}
+
+.diagnostics-none {
+  color: #ca8a04;
+}
+
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: #646cff;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+@media (prefers-color-scheme: light) {
+  .diagnostics {
+    border-top-color: rgba(0, 0, 0, 0.08);
+  }
+
+  .diagnostics ul {
+    color: #666;
+  }
 }
 
 code {
