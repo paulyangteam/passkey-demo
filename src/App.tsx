@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import "./App.css";
 
 type DemoMode =
@@ -147,6 +147,14 @@ function buildChallenge(wrongChallenge: boolean): BufferSource | string {
   return challenge;
 }
 
+async function abortPendingConditionalGet(
+  abortRef: RefObject<AbortController | null>,
+): Promise<void> {
+  abortRef.current?.abort();
+  // Android Chrome keeps the WebAuthn slot busy briefly after abort.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+}
+
 function App() {
   const mode = useMemo(() => parseDemoMode(window.location.search), []);
   const modeConfig = MODES.find((entry) => entry.id === mode) ?? MODES[0];
@@ -156,12 +164,17 @@ function App() {
   const [conditionalAvailable, setConditionalAvailable] = useState<
     boolean | null
   >(null);
+  const [conditionalPaused, setConditionalPaused] = useState(false);
   const [registeredCredentialId, setRegisteredCredentialId] = useState<
     string | null
   >(() => localStorage.getItem(REGISTERED_CREDENTIAL_KEY));
   const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
+    if (!modeConfig.webAuthn || conditionalPaused) {
+      return;
+    }
+
     abortRef.current?.abort();
     const abortController = new AbortController();
     abortRef.current = abortController;
@@ -203,6 +216,7 @@ function App() {
         setStatus(
           "No passkey registered for this site yet. Register one below, then focus the email field.",
         );
+        return;
       } else {
         setStatus(
           "Conditional UI is active — click the email field to see passkey suggestions.",
@@ -260,10 +274,19 @@ function App() {
       abortController.abort();
     };
   }, [
+    modeConfig.webAuthn,
     modeConfig.allowCredentials,
     modeConfig.wrongChallenge,
     registeredCredentialId,
+    conditionalPaused,
   ]);
+
+  useEffect(() => {
+    if (!modeConfig.webAuthn) {
+      setConditionalAvailable(null);
+      setStatus("Email mode — no conditional passkey request.");
+    }
+  }, [modeConfig.webAuthn]);
 
   async function registerPasskey() {
     if (!window.PublicKeyCredential) {
@@ -272,8 +295,11 @@ function App() {
     }
 
     setRegistering(true);
+    setConditionalPaused(true);
 
     try {
+      await abortPendingConditionalGet(abortRef);
+
       const username = email.trim() || "demo@example.com";
       const credential = (await navigator.credentials.create({
         publicKey: {
@@ -304,7 +330,7 @@ function App() {
       localStorage.setItem(REGISTERED_CREDENTIAL_KEY, credentialId);
       setRegisteredCredentialId(credentialId);
       setStatus(
-        "Passkey registered. Reload or focus the email field to see suggestions.",
+        "Passkey registered. Focus the email field to see suggestions.",
       );
     } catch (error) {
       setStatus(
@@ -314,6 +340,7 @@ function App() {
       );
     } finally {
       setRegistering(false);
+      setConditionalPaused(false);
     }
   }
 
@@ -425,6 +452,11 @@ function App() {
               <strong>Focus the input:</strong> the suggestion appears in the
               browser autofill dropdown when you click/focus the email field,
               not automatically on page load.
+            </li>
+            <li>
+              <strong>Registration on Android:</strong> cancel any pending
+              conditional request before creating a passkey. This demo aborts
+              conditional UI automatically when you tap Register passkey.
             </li>
             <li>
               <strong>Discoverable passkey required:</strong> only resident keys
