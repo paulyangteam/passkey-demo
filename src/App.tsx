@@ -1,5 +1,55 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+
+type DemoMode =
+  | "email"
+  | "webauthn"
+  | "webauthn-allow-credentials"
+  | "webauthn-wrong-challenge";
+
+type ModeConfig = {
+  id: DemoMode;
+  label: string;
+  webAuthn: boolean;
+  allowCredentials: boolean;
+  wrongChallenge: boolean;
+};
+
+const MODES: ModeConfig[] = [
+  {
+    id: "email",
+    label: "Email",
+    webAuthn: false,
+    allowCredentials: false,
+    wrongChallenge: false,
+  },
+  {
+    id: "webauthn",
+    label: "WebAuthn",
+    webAuthn: true,
+    allowCredentials: false,
+    wrongChallenge: false,
+  },
+  {
+    id: "webauthn-allow-credentials",
+    label: "WebAuthn + allowCredentials",
+    webAuthn: true,
+    allowCredentials: true,
+    wrongChallenge: false,
+  },
+  {
+    id: "webauthn-wrong-challenge",
+    label: "WebAuthn + allowCredentials + wrong challenge",
+    webAuthn: true,
+    allowCredentials: true,
+    wrongChallenge: true,
+  },
+];
+
+const DEMO_CREDENTIAL_ID = Uint8Array.from(
+  atob("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAh"),
+  (char) => char.charCodeAt(0),
+);
 
 function randomChallenge(): Uint8Array {
   const challenge = new Uint8Array(32);
@@ -7,24 +57,63 @@ function randomChallenge(): Uint8Array {
   return challenge;
 }
 
-function useWebAuthnParam(): boolean {
-  return new URLSearchParams(window.location.search).get("webAuthn") === "true";
+function parseDemoMode(search: string): DemoMode {
+  const params = new URLSearchParams(search);
+
+  if (params.get("webAuthn") !== "true") {
+    return "email";
+  }
+
+  if (
+    params.get("allowCredentials") === "true" &&
+    params.get("wrongChallenge") === "true"
+  ) {
+    return "webauthn-wrong-challenge";
+  }
+
+  if (params.get("allowCredentials") === "true") {
+    return "webauthn-allow-credentials";
+  }
+
+  return "webauthn";
 }
 
-function getModeUrl(webAuthn: boolean): string {
+function getModeUrl(mode: DemoMode): string {
+  const config = MODES.find((entry) => entry.id === mode) ?? MODES[0];
   const url = new URL(window.location.href);
 
-  if (webAuthn) {
+  url.searchParams.delete("webAuthn");
+  url.searchParams.delete("allowCredentials");
+  url.searchParams.delete("wrongChallenge");
+
+  if (config.webAuthn) {
     url.searchParams.set("webAuthn", "true");
-  } else {
-    url.searchParams.delete("webAuthn");
+  }
+
+  if (config.allowCredentials) {
+    url.searchParams.set("allowCredentials", "true");
+  }
+
+  if (config.wrongChallenge) {
+    url.searchParams.set("wrongChallenge", "true");
   }
 
   return `${url.pathname}${url.search}`;
 }
 
+function buildChallenge(wrongChallenge: boolean): BufferSource | string {
+  const challenge = randomChallenge();
+
+  if (wrongChallenge) {
+    return btoa(String.fromCharCode(...challenge));
+  }
+
+  return challenge;
+}
+
 function App() {
-  const webAuthnMode = useWebAuthnParam();
+  const mode = useMemo(() => parseDemoMode(window.location.search), []);
+  const modeConfig = MODES.find((entry) => entry.id === mode) ?? MODES[0];
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("Checking conditional passkey support…");
   const [conditionalAvailable, setConditionalAvailable] = useState<
@@ -61,13 +150,25 @@ function App() {
       );
 
       try {
+        const publicKey: PublicKeyCredentialRequestOptions = {
+          challenge: buildChallenge(modeConfig.wrongChallenge) as BufferSource,
+          rpId: window.location.hostname,
+          userVerification: "preferred",
+        };
+
+        if (modeConfig.allowCredentials) {
+          publicKey.allowCredentials = [
+            {
+              type: "public-key",
+              id: DEMO_CREDENTIAL_ID,
+              transports: ["internal", "hybrid"],
+            },
+          ];
+        }
+
         const credential = await navigator.credentials.get({
           mediation: "conditional",
-          publicKey: {
-            challenge: randomChallenge().buffer as BufferSource,
-            rpId: window.location.hostname,
-            userVerification: "preferred",
-          },
+          publicKey,
         });
 
         if (cancelled) return;
@@ -98,9 +199,9 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [modeConfig.allowCredentials, modeConfig.wrongChallenge]);
 
-  const autoComplete = webAuthnMode ? "webauthn" : "email";
+  const autoComplete = modeConfig.webAuthn ? "webauthn" : "email";
 
   return (
     <div className="app">
@@ -108,24 +209,18 @@ function App() {
         <h1>Passkey Demo</h1>
         <p className="tagline">Conditional WebAuthn UI with an email field</p>
         <nav className="mode-nav" aria-label="Autocomplete mode">
-          <a
-            href={getModeUrl(false)}
-            className={
-              webAuthnMode ? "mode-nav-link" : "mode-nav-link is-active"
-            }
-            aria-current={webAuthnMode ? undefined : "page"}
-          >
-            Email mode
-          </a>
-          <a
-            href={getModeUrl(true)}
-            className={
-              webAuthnMode ? "mode-nav-link is-active" : "mode-nav-link"
-            }
-            aria-current={webAuthnMode ? "page" : undefined}
-          >
-            WebAuthn mode
-          </a>
+          {MODES.map((entry) => (
+            <a
+              key={entry.id}
+              href={getModeUrl(entry.id)}
+              className={
+                mode === entry.id ? "mode-nav-link is-active" : "mode-nav-link"
+              }
+              aria-current={mode === entry.id ? "page" : undefined}
+            >
+              {entry.label}
+            </a>
+          ))}
         </nav>
       </header>
 
@@ -150,15 +245,16 @@ function App() {
 
           <p className="hint">
             <code>autoComplete=&quot;{autoComplete}&quot;</code>
-            {webAuthnMode ? (
+            {modeConfig.allowCredentials && (
               <>
                 {" "}
-                — enabled via <code>?webAuthn=true</code>
+                · <code>allowCredentials</code> with demo credential ID
               </>
-            ) : (
+            )}
+            {modeConfig.wrongChallenge && (
               <>
                 {" "}
-                — add <code>?webAuthn=true</code> for passkey autocomplete
+                · challenge passed as base64 <code>string</code> (invalid)
               </>
             )}
           </p>

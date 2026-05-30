@@ -1,5 +1,5 @@
 .app {
-  max-width: 480px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
@@ -23,12 +23,15 @@
 }
 
 .mode-nav {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.25rem;
-  border-radius: 999px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
+  max-width: 100%;
 }
 
 @media (prefers-color-scheme: light) {
@@ -40,13 +43,14 @@
 
 .mode-nav-link {
   display: inline-block;
-  padding: 0.45em 0.9em;
-  border-radius: 999px;
-  font-size: 0.875rem;
+  padding: 0.45em 0.75em;
+  border-radius: 8px;
+  font-size: 0.8125rem;
   font-weight: 500;
   text-decoration: none;
   color: inherit;
   opacity: 0.75;
+  text-align: center;
   transition:
     background-color 0.2s,
     opacity 0.2s;
@@ -61,10 +65,6 @@
   opacity: 1;
   background: #646cff;
   color: #fff;
-}
-
-.mode-nav-link.is-active:hover {
-  background: #535bf2;
 }
 
 .card {
